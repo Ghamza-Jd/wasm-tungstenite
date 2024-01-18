@@ -6,11 +6,17 @@ pub struct SafeWebSocket {
     ws: NonNull<WebSocket>,
 }
 
+unsafe impl Send for SafeWebSocket {}
+unsafe impl Sync for SafeWebSocket {}
+
 impl SafeWebSocket {
-    pub fn new(url: &str) -> Self {
-        let ws = WebSocket::new(url).unwrap();
-        Self {
-            ws: NonNull::from(Box::leak(Box::new(ws))),
+    pub fn new(url: &str) -> crate::Result<Self> {
+        let ws = WebSocket::new(url);
+        match ws {
+            Ok(ws) => Ok(Self {
+                ws: NonNull::from(Box::leak(Box::new(ws))),
+            }),
+            Err(_) => Err(crate::Error::UnsupportedUrlScheme),
         }
     }
 
@@ -29,7 +35,7 @@ impl Deref for SafeWebSocket {
 
 impl Drop for SafeWebSocket {
     fn drop(&mut self) {
-        self.data().close().unwrap();
+        _ = self.data().close();
         unsafe {
             drop(Box::from_raw(self.ws.as_ptr()));
         }
